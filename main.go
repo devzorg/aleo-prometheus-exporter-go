@@ -77,6 +77,22 @@ var (
 	)
 )
 
+type Response struct {
+	Number int `json:"number"`
+  CandidatePeers []string `json:"candidate_peers"`
+  ConnectedPeers []string `json:"connected_peers"`
+  LatestBlockHash string `json:"latest_block_hash"`
+  BlockHeight int `json:latest_block_height`
+  CumulativeWeight int `json:cumulative_weight`
+  CandidatePeers int `json:candidate_peers`
+  ConnectedPeers int `json:connected_peers`
+  ConnectedSyncNodes int `json:connected_sync_nodes`
+  Software string `json:software`
+  Status string `json:status`
+  Type string `json:type`
+  Version float `json:version`
+}
+
 type Exporter struct {
 	aleorpcEndpoint, aleorpcUsername, aleorpcPassword string
 }
@@ -102,88 +118,45 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
-	channelIdNameMap, err := e.LoadChannelIdNameMap()
-	if err != nil {
-		ch <- prometheus.MustNewConstMetric(
-			up, prometheus.GaugeValue, 0,
-		)
-		log.Println(err)
-		return
-	}
-	ch <- prometheus.MustNewConstMetric(
-		up, prometheus.GaugeValue, 1,
-	)
-
-	e.HitMirthRestApisAndUpdateMetrics(channelIdNameMap, ch)
+	e.UpdateMetrics(ch)
 }
 
-func (e *Exporter) LoadChannelIdNameMap() (map[string]string, error) {
-	// Create the map of channel id to names
-	channelIdNameMap := make(map[string]string)
+func (e *Exporter) UpdateMetrics(ch chan<- prometheus.Metric) {
+  requestString := map[string]string{"jsonrpc": "2.0", "id":"", "method": "getnodestate", "params": [] }
+  jsonValue, _ := json.Marshal(requestString)
 
-	req, err := http.NewRequest("GET", e.aleorpcEndpoint+channelIdNameApi, nil)
-	if err != nil {
-		return nil, err
-	}
+	req, err := http.NewRequest(http.MethodGet, e.aleorpcEndpoint, requestString)
+  req.Header.Set("user-agent": "aleo-exporter-go/0.1")
 
-	// This one line implements the authentication required for the task.
-	req.SetBasicAuth(e.aleorpcUsername, e.aleorpcPassword)
-	// Make request and show output.
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	// fmt.Println(string(body))
-
-	// we initialize our array
-	var channelIdNameMapXML ChannelIdNameMap
-	// we unmarshal our byteArray which contains our
-	// xmlFiles content into 'users' which we defined above
-	err = xml.Unmarshal(body, &channelIdNameMapXML)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := 0; i < len(channelIdNameMapXML.Entries); i++ {
-		channelIdNameMap[channelIdNameMapXML.Entries[i].Values[0]] = channelIdNameMapXML.Entries[i].Values[1]
-	}
-
-	return channelIdNameMap, nil
-}
-
-func (e *Exporter) HitMirthRestApisAndUpdateMetrics(channelIdNameMap map[string]string, ch chan<- prometheus.Metric) {
-	// Load channel stats
-	req, err := http.NewRequest("GET", e.aleorpcEndpoint, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// This one line implements the authentication required for the task.
-	req.SetBasicAuth(e.aleorpcUsername, e.aleorpcPassword)
+  if e.aleorpcUsername != nil && e.aleorpcPassword != nil {
+    req.SetBasicAuth(e.aleorpcUsername, e.aleorpcPassword)
+  }
+
 	// Make request and show output.
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+  if res.Body != nil {
+		defer res.Body.Close()
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
+
 	if err != nil {
 		log.Fatal(err)
 	}
 	// fmt.Println(string(body))
 
-	// we initialize our array
-	var channelStatsList ChannelStatsList
 	// we unmarshal our byteArray which contains our
-	// xmlFiles content into 'users' which we defined above
-	err = xml.Unmarshal(body, &channelStatsList)
+  Response := Response{}
+	err = json.Unmarshal(body, &Response)
 	if err != nil {
 		log.Fatal(err)
 	}
